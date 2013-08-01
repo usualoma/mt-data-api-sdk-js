@@ -11,3 +11,6 @@ build:
 	-npm install
 	-grunt update-sjcl-js
 	-grunt build
+
+test:
+	-grunt test

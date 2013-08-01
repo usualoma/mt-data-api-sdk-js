@@ -3,7 +3,12 @@ module.exports = function( grunt ) {
     "use strict";
 
     var srcHintOptionsBrowser = grunt.file.readJSON("src/.jshintrc"),
-        srcHintOptionsNode    = grunt.file.readJSON("src/.jshintrc");
+        srcHintOptionsNode    = grunt.file.readJSON("src/.jshintrc"),
+        connectServerPort     = 9001,
+        proxySnippet          = require("grunt-connect-proxy/lib/utils").proxyRequest,
+        MTServerStatusHelper  = "spec/helpers/psgi-server-status.js",
+        MTServerPort          = 9002,
+        MTServer;
     srcHintOptionsBrowser.browser = true;
     srcHintOptionsNode.node = true;
 
@@ -15,7 +20,8 @@ module.exports = function( grunt ) {
                 "<%= preprocess['node-bootstrap'].dest %>",
                 "<%= preprocess['data-api-browser'].dest %>",
                 "<%= Object.keys(uglify['data-api-browser'].files)[0] %>",
-                "<%= uglify['data-api-browser'].options.sourceMap %>"
+                "<%= uglify['data-api-browser'].options.sourceMap %>",
+                MTServerStatusHelper
             ]
         },
         preprocess: {
@@ -98,6 +104,53 @@ module.exports = function( grunt ) {
                     jshintrc: ".jshintrc"
                 }
             }
+        },
+        connect: {
+          jasmine: {
+            options: {
+              hostname: "localhost",
+              port: connectServerPort,
+              middleware: function (connect, options) {
+                return [
+                  proxySnippet,
+                  connect.static(options.base),
+                  connect.directory(options.base)
+                ];
+              }
+            },
+            proxies: [
+                {
+                    context: "/cgi-bin",
+                    host: "localhost",
+                    port: MTServerPort,
+                    https: false,
+                    changeOrigin: false
+                }
+            ]
+          },
+        },
+        jasmine: {
+            "data-api-browser": {
+                src: ["mt-static/data-api/v1/js/mt-data-api.js"],
+                options: {
+                    specs: "spec/data-api/**/*.js",
+                    host: "http://localhost:" + connectServerPort + "/",
+                    helpers: ["spec/vendor/**/*.js", "spec/helpers/*.js"],
+//                    outfile: "_SpecRunner.html",
+//                    keepRunner: true,
+//                    template: require("grunt-template-jasmine-requirejs"),
+//                    templateOptions: {
+//                        requireConfig: {
+//                            baseUrl: "app/",
+//                            paths: requireConfig.paths,
+//                            shim: requireConfig.shim,
+//                            deps: requireConfig.deps,
+//                            locale: requireConfig.locale,
+//                            hbs: requireConfig.hbs
+//                        }
+//                    }
+                }
+            },
         }
     });
 
@@ -180,13 +233,81 @@ module.exports = function( grunt ) {
         });
     });
 
+    grunt.registerTask("start-movable-type-server", function() {
+        var done    = this.async(),
+            fs      = require("fs"),
+            path    = require("path"),
+            spawn   = require("child_process").spawn,
+            base    = path.dirname(fs.realpathSync(__filename)),
+            mtHome  = process.env.MT_HOME,
+            options = [
+              path.join(mtHome, "t", "mysql-test-psgi-server.pl"),
+              "--port",
+              MTServerPort,
+              "--plugin-path",
+              path.join(base, "spec", "plugins"),
+            ];
+
+        function writeHelper(status) {
+            var stmt = [
+                "var isMovableTypeServerRunning = " + (status ? "true" : "false"),
+                "    dataApiBaseUrl = 'http://localhost:" + connectServerPort + "/cgi-bin/mt-data-api.cgi';",
+            ].join("\n");
+            fs.writeFileSync(MTServerStatusHelper, stmt, "utf8");
+        }
+
+        if (! mtHome) {
+            writeHelper(false);
+            return done();
+        }
+        writeHelper(true);
+
+        MTServer = spawn("perl", options);
+
+        MTServer.stderr.on("data", function(data) {
+            if (/Setting gid to/.test(data)) {
+                done();
+            }
+        });
+    });
+
+    function stopMovableTypeServer() {
+        if (MTServer) {
+            MTServer.kill("SIGTERM");
+            MTServer = null;
+        }
+    }
+
+    grunt.registerTask("stop-movable-type-server", stopMovableTypeServer);
+    grunt.event.on("jasmine.testDone", function(total, passed, failed) {
+        if (failed) {
+            stopMovableTypeServer();
+        }
+    });
+
     grunt.loadNpmTasks("grunt-contrib-jshint");
     grunt.loadNpmTasks("grunt-contrib-clean");
     grunt.loadNpmTasks("grunt-contrib-watch");
     grunt.loadNpmTasks("grunt-contrib-uglify");
+    grunt.loadNpmTasks("grunt-contrib-jasmine");
+    grunt.loadNpmTasks("grunt-contrib-connect");
+    grunt.loadNpmTasks("grunt-connect-proxy");
     grunt.loadNpmTasks("grunt-preprocess");
 
     grunt.registerTask("default", "build");
     grunt.registerTask("build", ["preprocess", "jshint", "uglify"]);
     grunt.registerTask("dev", ["preprocess", "jshint"]);
+
+    grunt.registerTask("test", [
+        "configureProxies:jasmine",
+        "connect:jasmine",
+        "start-movable-type-server",
+        "jasmine:data-api-browser",
+        "stop-movable-type-server",
+    ]);
+
+    grunt.registerTask("ci", [
+        "connect:jasmine",
+        "jasmine:data-api-browser",
+    ]);
 };

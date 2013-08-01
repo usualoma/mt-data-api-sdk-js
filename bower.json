@@ -1,0 +1,7 @@
+{
+  "name": "mt-data-api-sdk",
+  "version": "0.1.0",
+  "devDependencies": {
+    "sinon": "http://sinonjs.org/releases/sinon-1.7.1.js"
+  }
+}
