@@ -1,15 +1,34 @@
 language: node_js
 node_js:
   - 0.8
+env:
+  - MT_HOME=/home/travis/mt
 before_install:
   - npm install -g grunt-cli
   - npm install -g bower
   - bower install
-notifications:
-  irc:
-    channels:
-      - "irc.freenode.com#movabletype"
-      - "irc.freenode.com#movabletype-ja"
-    on_success: change
-    on_failure: always
-    use_notice: true
+  - mysql -e 'CREATE DATABASE mt_test'
+  - "sudo apt-get install cpanminus libplack-perl starman libdbd-mysql-perl 2>&1 | tail -n 4"
+  - sudo cpanm -n Digest::SHA || cat /home/travis/.cpanm/build.log
+  - sudo cpanm -n CGI::PSGI || cat /home/travis/.cpanm/build.log
+  - sudo cpanm -n CGI::Parse::PSGI || cat /home/travis/.cpanm/build.log
+  - sudo cpanm -n CGI::Compile || cat /home/travis/.cpanm/build.log
+  - sudo cpanm -n XMLRPC::Transport::HTTP::Plack || cat /home/travis/.cpanm/build.log
+  - sudo cpanm -n HTML::Entities || cat /home/travis/.cpanm/build.log
+  - sudo cpanm -n HTML::Parser || cat /home/travis/.cpanm/build.log
+  - sudo cpanm -n Crypt::DSA || cat /home/travis/.cpanm/build.log
+  - sudo cpanm -n Crypt::SSLeay || cat /home/travis/.cpanm/build.log
+  - sudo cpanm -n Cache::File || cat /home/travis/.cpanm/build.log
+  - sudo cpanm -n Archive::Tar || cat /home/travis/.cpanm/build.log
+  - sudo cpanm -n IO::Compress::Gzip || cat /home/travis/.cpanm/build.log
+  - sudo cpanm -n IO::Uncompress::Gunzip || cat /home/travis/.cpanm/build.log
+  - sudo cpanm -n Archive::Zip || cat /home/travis/.cpanm/build.log
+  - sudo cpanm -n Digest::SHA1 || cat /home/travis/.cpanm/build.log
+  - sudo cpanm -n Net::SMTP || cat /home/travis/.cpanm/build.log
+  - sudo cpanm -n IO::Socket::SSL || cat /home/travis/.cpanm/build.log
+  - sudo cpanm -n Net::SSLeay || cat /home/travis/.cpanm/build.log
+  - sudo cpanm -n XML::Parser || cat /home/travis/.cpanm/build.log
+  - sudo cpanm -n Test::Deep || cat /home/travis/.cpanm/build.log
+  - git clone --branch develop --depth=1 https://github.com/movabletype/movabletype.git $MT_HOME
+  - perl -i -pe 's{DBUser mt}{DBUser travis}g' $MT_HOME/t/mysql-test.cfg
+  - perl -i -pe 's{(eval "use MT::PSGI;";)}{$1 die \$@ if \$@;}g' $MT_HOME/t/mysql-test-psgi-server.pl
