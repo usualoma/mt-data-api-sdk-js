@@ -48,12 +48,12 @@ describe("DataAPI Event", function(){
         expect(tokenData).toBeNull();
     });
 
-    itWithCookie("can be retrieved token data from the cookie", function(){
+    itWithCookie("Can be retrieved token data from the cookie", function(){
         var defaultKey  = MT.DataAPI.accessTokenKey,
             accessToken = 'some access token',
             tokenData;
 
-        Cookie.bake(defaultKey, '{"accessToken":"' + accessToken + '"}');
+        Cookie.bake(defaultKey, '{"accessToken":"' + accessToken + '"}', undefined, '/');
 
         tokenData = api._updateTokenFromDefaultCookie();
 
